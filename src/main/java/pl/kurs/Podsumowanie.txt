@@ -1,0 +1,294 @@
+Wątki:
+-słowo synchronized
+-----------------------------------------------
+    Wątek to niezależna ścieżka wykonania programu. Dzięki wątkom aplikacja może wykonywać wiele operacji równolegle -
+np. pobierać dane z sieci, jednocześnie aktualizując interfejs użytkownika.
+
+    Problem współbieżności
+Gdy wiele wątków operuje na tych samych danych, może dojść do race condition - sytuacji,
+gdzie wynik zależy od kolejności wykonania wątków.
+
+    class Licznik {
+        private int wartosc = 0;
+
+        public void zwieksz() {
+            wartosc++;  // NIEBEZPIECZNE! Trzy operacje: odczyt, inkrementacja, zapis
+        }
+    }
+Jeśli dwa wątki wywołają zwieksz() jednocześnie, mogą nadpisać swoje zmiany i wartość zwiększy się tylko o 1 zamiast o 2.
+
+synchronized zapewnia wzajemne wykluczanie - tylko jeden wątek może wykonywać synchronizowany kod w danym momencie.
+
+    Synchronizacja metody:
+        public synchronized void zwieksz() {
+            wartosc++;  // Teraz bezpieczne
+        }
+
+    Synchronizacja bloku:
+        public void zwieksz() {
+            synchronized(this) {
+                wartosc++;
+            }
+        }
+
+    Każdy obiekt w Javie ma wbudowany monitor (rodzaj zamka). Gdy wątek wchodzi do bloku synchronized, uzyskuje blokadę na tym obiekcie.
+    Inne wątki muszą czekać, aż blokada zostanie zwolniona.
+
+    class KontoBankowe {
+        private int saldo = 1000;
+
+        public synchronized boolean przelew(int kwota) {
+            if (saldo >= kwota) {
+                saldo -= kwota;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    Bez synchronized dwa wątki mogłyby jednocześnie sprawdzić saldo, uznać że jest wystarczające
+    i oba wykonać przelew - nawet jeśli pieniędzy by nie starczyło.
+
+Najważniejsze zasady
+    -synchronized = tylko jeden wątek na raz
+    -Używaj tego na współdzielonych zasobach (zmienne, obiekty)
+    -Zbyt dużo synchronizacji = wolniejszy program
+    -Za mało synchronizacji = błędy i chaos
+    -Używaj synchronized tylko tam, gdzie wiele wątków modyfikuje współdzielone dane
+    -Synchronizuj najmniejszy możliwy fragment kodu (performance)
+    -Uważaj na deadlock - sytuację, gdzie wątki czekają na siebie nawzajem w nieskończoność
+    -Alternatywy: klasy z pakietu java.util.concurrent (np. AtomicInteger)
+
+    -Złota zasada: Jeśli kilka wątków czyta i pisze do tej samej zmiennej, potrzebujesz synchronizacji.
+    Jeśli tylko czytają - synchronizacja nie jest konieczna.
+--------------------------------------------------------------------------------------
+-obiekt Lock np ReetrantLock - prezcyzyjniesze w działaniu niż samo synchronized
+    Lock (najczęściej ReentrantLock) to interfejs z java.util.concurrent.locks,
+    który daje większą kontrolę nad blokowaniem niż synchronized.
+    Podstawowa składnia:
+        Lock zamek = new ReentrantLock();
+        zamek.lock();
+        try {
+            // kod chroniony
+        } finally {
+            zamek.unlock(); // ZAWSZE w finally!
+        }
+    Dlaczego Lock jest "precyzyjniejszy"?
+    1. Timeout
+    tryLock(czas) - czeka maksymalnie określony czas, potem rezygnuje
+    synchronized czeka w nieskończoność
+
+    2. Próba bez czekania
+    tryLock() - próbuje zablokować natychmiast, jeśli zajęte to rezygnuje
+    Możesz wykonać alternatywną logikę zamiast czekać
+
+    3. Przerwanie czekania
+    lockInterruptibly() - można przerwać wątek czekający na zamek
+    synchronized nie pozwala na przerwanie
+
+    4. Sprawiedliwe kolejkowanie
+    new ReentrantLock(true) - wątki dostają dostęp w kolejności FIFO
+    synchronized nie daje kontroli nad kolejnością
+
+    5. Wiele warunków oczekiwania
+    Condition - możesz tworzyć wiele różnych warunków (np. "niepusty", "niepełny")
+    synchronized ma tylko wait() i notify()
+
+    6. ReadWriteLock
+    Wiele wątków może jednocześnie czytać, tylko jeden może pisać
+    Optymalizacja gdy masz dużo odczytów, mało zapisów
+
+Kiedy czego używać?
+synchronized:
+    Prosta synchronizacja
+    Nie potrzebujesz zaawansowanych funkcji
+    Chcesz prostszy kod
+
+Lock:
+    Potrzebujesz timeoutu
+    Chcesz móc zrezygnować z czekania
+    Potrzebujesz sprawiedliwego kolejkowania
+    Złożone scenariusze z wieloma warunkami
+    Dużo odczytów, mało zapisów (ReadWriteLock)
+
+Podsumowanie jednym zdaniem
+    Lock daje pełną kontrolę nad blokowaniem (timeout, rezygnacja, sprawiedliwość, wiele warunków),
+ale wymaga ręcznego zarządzania - synchronized jest prostsze, ale mniej elastyczne.
+----------------------------------------------------------------------------------------------------------
+-poczytać o synchronizowanych kolejkach - concurentHashset, concurenthashmap
+    Synchronizowane kolekcje - ConcurrentHashMap i podobne
+Czym są kolekcje współbieżne?
+    To struktury danych z pakietu java.util.concurrent, które są bezpieczne dla wielu wątków bez potrzeby ręcznej synchronizacji.
+    Są zoptymalizowane pod kątem wydajności w środowisku wielowątkowym.
+Dlaczego nie zwykłe kolekcje?
+
+Problem ze standardowymi kolekcjami:
+    Map<String, Integer> mapa = new HashMap<>();
+        // NIE jest thread-safe! Kilka wątków = chaos
+    Stare rozwiązanie (wolne):
+    Map<String, Integer> mapa = Collections.synchronizedMap(new HashMap<>());
+        // Thread-safe, ale BARDZO wolne - blokuje całą mapę przy każdej operacji
+    Nowoczesne rozwiązanie (szybkie):
+    Map<String, Integer> mapa = new ConcurrentHashMap<>();
+        // Thread-safe i szybkie - segmentowe blokowanie
+ConcurrentHashMap
+Jak działa:
+    Dzieli mapę na segmenty
+    Każdy segment może być blokowany niezależnie
+    Wiele wątków może jednocześnie pracować na różnych segmentach
+    Odczyty są prawie zawsze bez blokowania
+
+Podstawowe operacje:
+    ConcurrentHashMap<String, Integer> mapa = new ConcurrentHashMap<>();
+
+    mapa.put("klucz", 100);           // Thread-safe
+    Integer wartosc = mapa.get("klucz");  // Thread-safe, zwykle bez blokady
+
+    // Atomowe operacje (bez race condition)
+    mapa.putIfAbsent("klucz", 200);   // Dodaj tylko jeśli nie istnieje
+    mapa.replace("klucz", 100, 150);  // Zamień tylko jeśli wartość = 100
+    mapa.remove("klucz", 100);        // Usuń tylko jeśli wartość = 100
+
+Różnica vs HashMap + synchronized:
+    Collections.synchronizedMap() - blokuje całą mapę przy każdej operacji
+    ConcurrentHashMap - blokuje tylko fragment mapy (segment)
+
+ConcurrentHashSet
+    Uwaga: Nie ma ConcurrentHashSet w standardowej bibliotece!
+    Rozwiązanie:
+    Set<String> set = ConcurrentHashMap.newKeySet();
+    // Lub
+    Set<String> set = Collections.newSetFromMap(new ConcurrentHashMap<>());
+Kolejki współbieżne
+    BlockingQueue - kolejka z blokowaniem
+    Rodzaje:
+        ArrayBlockingQueue - ograniczona pojemność, oparta na tablicy
+        LinkedBlockingQueue - opcjonalnie ograniczona, oparta na liście
+        PriorityBlockingQueue - z priorytetami
+        SynchronousQueue - pojemność 0, bezpośrednie przekazywanie
+
+    Kluczowa różnica:
+        put() - blokuje jeśli kolejka pełna (czeka aż będzie miejsce)
+        take() - blokuje jeśli kolejka pusta (czeka aż pojawi się element)
+            BlockingQueue<String> kolejka = new ArrayBlockingQueue<>(10);
+            // Producent
+            kolejka.put("zadanie");  // Czeka jeśli pełna
+            // Konsument
+            String zadanie = kolejka.take();  // Czeka jeśli pusta
+    Zastosowanie: Wzorzec producent-konsument bez ręcznej synchronizacji.
+
+    ConcurrentLinkedQueue - nieblokująca kolejka
+        Queue<String> kolejka = new ConcurrentLinkedQueue<>();
+
+        kolejka.offer("element");  // Dodaj (nie blokuje)
+        String element = kolejka.poll();  // Pobierz (zwraca null jeśli pusta)
+
+    Różnica vs BlockingQueue:
+        Nie blokuje - natychmiast zwraca wynik
+        Nieograniczona pojemność
+        Szybsza dla scenariuszy bez czekania
+
+    CopyOnWriteArrayList
+        List<String> lista = new CopyOnWriteArrayList<>();
+
+        Jak działa:
+            Przy każdym zapisie tworzy nową kopię całej tablicy
+            Odczyty są całkowicie bez blokowania
+            Iteratory nigdy nie rzucają ConcurrentModificationException
+
+        Kiedy używać:
+            Dużo odczytów, mało zapisów
+            Małe listy (kopiowanie jest kosztowne)
+            Potrzebujesz bezpiecznych iteratorów
+
+        Kiedy NIE używać:
+            Częste modyfikacje (każdy zapis = kopiowanie całej listy)
+            Duże listy
+
+Kluczowe różnice
+    Collections.synchronizedX() vs Concurrent:
+
+    synchronized - blokuje całą kolekcję
+    Concurrent - blokuje fragmenty lub wcale
+
+    BlockingQueue vs zwykła Queue:
+
+    BlockingQueue - czeka (put/take)
+    Zwykła Queue - nie czeka (offer/poll zwraca natychmiast)
+
+    CopyOnWrite vs synchronized:
+
+    CopyOnWrite - odczyty bez blokowania, zapisy kopiują
+    synchronized - wszystko blokowane
+
+Złote zasady
+    Nie używaj HashMap/ArrayList w wielowątkowym kodzie - użyj odpowiedników Concurrent
+    ConcurrentHashMap > Collections.synchronizedMap() - prawie zawsze
+    BlockingQueue - idealny do producent-konsument
+    AtomicInteger - zamiast synchronized dla prostych liczników
+    CopyOnWrite - tylko gdy dużo czytań, mało zapisów
+
+Podsumowanie
+    Kolekcje współbieżne to gotowe, zoptymalizowane rozwiązania do pracy wielowątkowej.
+    Zamiast ręcznie synchronizować zwykłe kolekcje, używaj ich - są szybsze, bezpieczniejsze i prostsze w użyciu.
+-----------------------------------------------------------------------------------------------------------------------------------
+
+-poczytać o AtomicInteger
+    AtomicInteger to klasa z pakietu java.util.concurrent.atomic,
+    która umożliwia bezpieczne i atomowe operacje na liczbie całkowitej w środowisku wielowątkowym.
+    Oznacza to, że wiele wątków może jednocześnie odczytywać i zmieniać jej wartość bez ryzyka błędów
+    wynikających z braku synchronizacji.
+
+    Działa szybciej niż synchronized, bo wykorzystuje mechanizm CAS (Compare-And-Swap), czyli porównaj i zamień.
+    Używa się jej głównie do liczników, ID, statystyk i innych współdzielonych wartości.
+
+    Najczęstsze metody:
+        get() – zwraca aktualną wartość
+        set(int newValue) – ustawia nową wartość
+        incrementAndGet() – zwiększa o 1 i zwraca wynik
+        addAndGet(int delta) – dodaje określoną wartość
+        compareAndSet(expect, update) – zmienia wartość tylko, jeśli obecna równa się oczekiwanej
+
+    W skrócie:
+        AtomicInteger = liczba całkowita, która działa poprawnie w wielu wątkach bez synchronized.
+------------------------------------------------------------------------------------------------------------------------------------
+
+baza danych
+- poziomy izolacji tranzakcji - dirty read itp
+
+    Poziomy izolacji transakcji określają, jak bardzo transakcje są od siebie odizolowane
+    (czyli jak bardzo „widzą” swoje wzajemne zmiany).
+    Im wyższy poziom izolacji, tym większa pewność poprawnych danych, ale mniejsza wydajność.
+
+    Poziomy izolacji transakcji – podsumowanie
+        READ UNCOMMITTED
+            Najniższy poziom izolacji.
+            Transakcje mogą czytać dane, które nie zostały jeszcze zatwierdzone (tzw. dirty read).
+            Możliwe błędy: dirty read, non-repeatable read, phantom read.
+            Szybki, ale ryzykowny – dane mogą być niepoprawne.
+        READ COMMITTED
+            Każda transakcja widzi tylko dane już zatwierdzone przez inne transakcje.
+            Dirty read jest niemożliwy.
+            Możliwe błędy: non-repeatable read i phantom read.
+            Domyślny poziom w większości baz (np. PostgreSQL, Oracle).
+        REPEATABLE READ
+            Gwarantuje, że dane odczytane raz nie zmienią się w czasie trwania transakcji.
+            Chroni przed dirty read i non-repeatable read.
+            Nadal możliwy phantom read (mogą pojawić się nowe wiersze spełniające warunek).
+            Używany np. w MySQL jako domyślny.
+        SERIALIZABLE
+            Najwyższy poziom izolacji.
+            Symuluje, jakby transakcje wykonywały się jedna po drugiej (kolejno, nie równolegle).
+            Chroni przed wszystkimi problemami: dirty read, non-repeatable read, phantom read.
+            Najbezpieczniejszy, ale najwolniejszy – sporo blokad.
+
+    Wyjaśnienia pojęć:
+        Dirty read: odczyt danych, które inna transakcja zmieniła, ale jeszcze nie zatwierdziła.
+        Non-repeatable read: to samo zapytanie w tej samej transakcji daje różne wyniki, bo inna transakcja zmieniła dane.
+        Phantom read: w kolejnych odczytach pojawiają się nowe lub znikają wiersze spełniające ten sam warunek.
+
+    Podsumowanie logiczne:
+        Im wyższy poziom izolacji, tym większa spójność danych, ale mniejsza wydajność.
+        Kolejność od najsłabszego do najsilniejszego:
+
+    READ UNCOMMITTED → READ COMMITTED → REPEATABLE READ → SERIALIZABLE

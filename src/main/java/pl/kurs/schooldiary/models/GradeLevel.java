@@ -1,0 +1,18 @@
+package pl.kurs.schooldiary.models;
+
+public enum GradeLevel {
+    NIEDOSTATECZNY,
+    DOPUSZCZAJACY_MINUS,
+    DOPUSZCZAJACY,
+    DOPUSZCZAJACY_PLUS,
+    DOSTATECZNY_MINUS,
+    DOSTATECZNY,
+    DOSTATECZNY_PLUS,
+    DOBRY_MINUS,
+    DOBRY,
+    DOBRY_PLUS,
+    BARDZO_DOBRY_MINUS,
+    BARDZO_DOBRY,
+    BARDZO_DOBRY_PLUS,
+    CELUJACY;
+}
