@@ -8,6 +8,8 @@ public class SchoolDiaryApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(SchoolDiaryApplication.class, args);
+
+        System.out.println("webhook test");
     }
 
 
